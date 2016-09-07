@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/mangalaman93/gitbox/box"
-	"net/url"
 )
 
 func main() {
@@ -23,24 +22,36 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "push":
-			if box.IsBoxRepoCmd(baseWD) {
-				box.Push(baseWD)
+			isBoxRepo, errBox := box.IsBoxRepo(baseWD)
+			if errBox != nil {
+				log.Fatalln("Unable to check remote url :: ", errBox)
+			}
+			if isBoxRepo {
+				errBox := box.Push(baseWD)
+				if errBox != nil {
+					log.Fatalln("error in pushing :: ", errBox)
+				}
 				return
 			}
 		case "pull":
-			if box.IsBoxRepoCmd(baseWD) {
-				box.Pull(baseWD)
+			isBoxRepo, errBox := box.IsBoxRepo(baseWD)
+			if errBox != nil {
+				log.Fatalln("Unable to check remote url :: ", errBox)
+			}
+			if isBoxRepo {
+				errBox := box.Pull(baseWD)
+				if errBox != nil {
+					log.Fatalln("error in pulling :: ", errBox)
+				}
 				return
 			}
 		case "clone":
 			if len(os.Args) > 2 {
-				rawURL := os.Args[2]
-				boxURL, errURL := url.Parse(rawURL)
-				if errURL != nil {
-					log.Fatalf("Invalid url %s :: %v", rawURL, errWD)
+				isBoxURL, errBox := box.IsBoxRemoteURL(os.Args[2])
+				if errBox != nil {
+					log.Fatalln("Invalid url to clone :: ", errBox)
 				}
-
-				if boxURL.Scheme == "box" {
+				if isBoxURL {
 					box.Clone(baseWD)
 					return
 				}
