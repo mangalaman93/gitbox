@@ -7,11 +7,17 @@ import (
 	"strings"
 	"errors"
 	"os"
+	"bytes"
+	"mime/multipart"
+	"path/filepath"
+	"io"
+	"fmt"
+	"os/exec"
 )
 
 var Client_Id = "urwvi2575ynhhu3tr5ki8br5dilsdxyt"
 var Client_Secret = "fSkvmWjP1mNNY8PsJOXZniKkHHMNF2Ra"
-var Access_Token = "e7E2PvIYVSjfTvdk6akkyFO1KBE9Wv4d"
+var Access_Token = "jITEhGRQWgCGHxpwPudlaa8ZhiSh74h5"
 
 //func get_access_token(auth_code string) {
 //	// do manually for now...
@@ -179,4 +185,155 @@ func Get_Object_Id(boxpath string) (string, string, error) {
 		}
 	}
 	return "", "", errors.New("Invalid path")
+}
+
+//func Upload_File_By_Id(file_id string, path string) error {
+//	data, err := os.Open(path)
+//	if err != nil {
+//		return err
+//	}
+//	defer data.Close()
+//	req, err := http.NewRequest("PUT", "https://upload.box.com/api/2.0/files/" + file_id + "/content", data)
+//	req.Header.Set("Authorization", "Bearer e7E2PvIYVSjfTvdk6akkyFO1KBE9Wv4d")
+//	req.Header.Set("Content-Type", "text/plain")
+//	resp, err := http.DefaultClient.Do(req)
+//	body, _ := ioutil.ReadAll(resp.Body)
+//	fmt.Println(string(body))
+//	return nil
+//}
+
+func Upload_File_By_Id(file_id string, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("filename", filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, file)
+
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "https://upload.box.com/api/2.0/files/" + file_id + "/content", body)
+	req.Header.Set("Authorization", "Bearer e7E2PvIYVSjfTvdk6akkyFO1KBE9Wv4d")
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	_, err = http.DefaultClient.Do(req)
+	//_, _ := ioutil.ReadAll(resp.Body)
+	////fmt.Println(string(body2))
+	return err
+}
+
+//func Upload_New_File(parent_id string, path string) error {
+//
+//	p := Remove_Slashes_At_Ends(path)
+//	dirs := strings.Split(p, "/")
+//	name := dirs[len(dirs) - 1]
+//	parent := map[string]string{
+//		"id":        parent_id,
+//	}
+//
+//	file, err := os.Open(path)
+//	if err != nil {
+//		return err
+//	}
+//	defer file.Close()
+//
+//	body := &bytes.Buffer{}
+//
+//	writer := multipart.NewWriter(body)
+//	part, err := writer.CreateFormFile("filename", filepath.Base(path))
+//	if err != nil {
+//		return err
+//	}
+//	_, err = io.Copy(part, file)
+//
+//	_ = writer.WriteField("name", name)
+//	w1, _ := writer.CreateFormField("parent")
+//
+//	w1.Write(parent)
+//
+//	err = writer.Close()
+//	if err != nil {
+//		return err
+//	}
+//
+//	req, err := http.NewRequest("POST", "https://upload.box.com/api/2.0/files/content", body)
+//	req.Header.Set("Authorization", "Bearer e7E2PvIYVSjfTvdk6akkyFO1KBE9Wv4d")
+//
+//	req.Header.Set("Content-Type", writer.FormDataContentType())
+//	_, err = http.DefaultClient.Do(req)
+//	//_, _ := ioutil.ReadAll(resp.Body)
+//	////fmt.Println(string(body2))
+//
+//	return err
+//}
+
+func Upload_New_File(parent_id string, path string) error {
+
+	p := Remove_Slashes_At_Ends(path)
+	dirs := strings.Split(p, "/")
+	name := dirs[len(dirs) - 1]
+	jsonMap := map[string]string{
+		"id": parent_id,
+	}
+	json_str, _ := json.Marshal(jsonMap)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("name", name)
+	_ = writer.WriteField("parent", string(json_str))
+
+	part, err := writer.CreateFormFile("filename", filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, file)
+
+	//w1, _ := writer.CreateFormField("parent")
+
+	//w1.Write(json_str)
+
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "https://upload.box.com/api/2.0/files/content", body)
+	req.Header.Set("Authorization", "Bearer " + Access_Token)
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	////b, _ := ioutil.ReadAll(req.Body)
+	////fmt.Println(string(b))
+	////
+	//resp, err := http.DefaultClient.Do(req)
+	//body2, _ := ioutil.ReadAll(resp.Body)
+	//fmt.Println(string(body2))
+	cmd_arr := []string{"https://upload.box.com/api/2.0/files/content", "-H", "\"Authorization: Bearer " + Access_Token + "\"", "-X", "POST", "-F", "attributes='{\"name\":\"" + name + "\", \"parent\":{\"id\":\"" + parent_id + "\"}}'", "-F", "file=@" + path}
+	fmt.Println(cmd_arr)
+	c := exec.Command("curl", cmd_arr...)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	err = c.Run()
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+
+	//fmt.Println(string(b1))
+	return err
 }
